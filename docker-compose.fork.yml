@@ -1,0 +1,45 @@
+# Runs THIS fork (categoryid patch, branch feat/categoryid) instead of the official
+# ihatemoney/ihatemoney image — builds from the local Dockerfile, which already includes
+# the patched code (ADD . /src in the Dockerfile picks up this checkout as-is).
+#
+# Usage: docker compose -f docker-compose.fork.yml up --build
+#
+# Same config knobs as the upstream docker-compose.yml example — see
+# https://ihatemoney.readthedocs.io/en/latest/configuration.html for all settings.
+# This is a local-dev example (SECRET_KEY/ADMIN_PASSWORD are placeholders) — set your own
+# values before exposing this beyond localhost.
+
+services:
+  ihatemoney-fork:
+    build: .
+    environment:
+      - DEBUG=False
+      - ACTIVATE_DEMO_PROJECT=True
+      - ACTIVATE_ADMIN_DASHBOARD=False
+      - ADMIN_PASSWORD=
+      - ALLOW_PUBLIC_PROJECT_CREATION=True
+      - BABEL_DEFAULT_TIMEZONE=UTC
+      - GREENLET_TEST_CPP=no
+      - MAIL_DEFAULT_SENDER=Budget manager <admin@example.com>
+      - MAIL_PASSWORD=
+      - MAIL_PORT=25
+      - MAIL_SERVER=localhost
+      - MAIL_USE_SSL=False
+      - MAIL_USE_TLS=False
+      - MAIL_USERNAME=
+      - SECRET_KEY=change-me
+      - SESSION_COOKIE_SECURE=True
+      - SHOW_ADMIN_EMAIL=True
+      - SQLALCHEMY_DATABASE_URI=sqlite:////database/ihatemoney.db
+      - SQLALCHEMY_TRACK_MODIFICATIONS=False
+      - APPLICATION_ROOT=/
+      - ENABLE_CAPTCHA=False
+      - LEGAL_LINK=
+      - PORT=8000
+    volumes:
+      - ihatemoney-fork-db:/database
+    ports:
+      - "8000:8000"
+
+volumes:
+  ihatemoney-fork-db:

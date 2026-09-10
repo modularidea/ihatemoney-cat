@@ -27,3 +27,18 @@ Cospend), not just the plugin.
 Base commit: `e66a7672e8e5c41549bf53c4a824c72c43ab9079` (upstream `main`, "Back to development:
 7.2.2"). Upstream's own test suite is unmodified in behavior (146 passed, 5 skipped, same as
 before the patch).
+
+## Running locally with Docker
+
+```bash
+git clone --branch feat/categoryid https://github.com/modularidea/ihatemoney-cat.git
+cd ihatemoney-cat
+docker compose -f docker-compose.fork.yml up --build
+```
+
+Builds this checkout (patched code included) instead of pulling the official
+`ihatemoney/ihatemoney` image, and starts it on `http://localhost:8000`. `docker-compose.fork.yml`
+uses the same environment variables as upstream's own `docker-compose.yml` example — see
+[the config docs](https://ihatemoney.readthedocs.io/en/latest/configuration.html) for all of
+them. It's a local-dev example (`SECRET_KEY`/`ADMIN_PASSWORD` are placeholders) — set your own
+values before exposing it beyond `localhost`.
