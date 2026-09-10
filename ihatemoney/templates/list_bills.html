@@ -68,6 +68,16 @@
 {% endblock %}
 
 {% block content %}
+    {# Icon+Name je categoryid — gehalten synchron mit forms.py CATEGORYID_CHOICES
+       bzw. obsidian-ihm-plugin/src/categorize/cospend-category-map.ts. Nur fürs
+       Anzeigen hier als Dict statt Python-Helper: kein Categories-Endpoint in
+       diesem Patch, siehe server-patch/README.md. #}
+    {% set COSPEND_CATEGORIES = {
+        -1: "🛒 Grocery", -2: "🎉 Bar/Party", -3: "🏠 Rent", -4: "🌩 Bill",
+        -5: "🚸 Excursion/Culture", -6: "💚 Health", -10: "🛍 Shopping",
+        -12: "🍴 Restaurant", -13: "🛌 Accommodation", -14: "🚌 Transport",
+        -15: "🎾 Sport",
+    } %}
     <div id="bill-form" class="modal fade show" role="dialog">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
@@ -166,6 +176,7 @@
                 <tr><th>{{ _("When?") }}
                 </th><th>{{ _("Who paid?") }}
                 </th><th>{{ _("For what?") }}
+                </th><th>{{ _("Category") }}
                 </th><th>{{ _("For whom?") }}
                 </th><th>{{ _("How much?") }}
                 </th><th>{{ _("Actions") }}</th></tr>
@@ -181,6 +192,7 @@
                 </td>
                 <td>{{ bill.payer }}</td>
                 <td>{{ bill.what }}</td>
+                <td>{{ COSPEND_CATEGORIES.get(bill.category_id, "–") }}</td>
                 <td>{% set owers_label = bill.get_owers_label(g.project.active_members) -%}
                 {% if owers_label[0] == "everyone" -%}
                 {{ _("Everyone") }}

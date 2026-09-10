@@ -186,6 +186,8 @@
         </div>
     </div>
 
+    {{ input(form.categoryid, inline=True, class="form-control custom-select") }}
+
     <details class="mb-3">
         <summary class="mb-2">{{ _("More options") }}</summary>
         {% if g.project.default_currency != "XXX" %}

@@ -359,6 +359,28 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField(_("Reset password"))
 
 
+# Nextcloud Cospends fest verdrahtete globale Standardkategorien — gehalten
+# synchron mit obsidian-ihm-plugin/src/categorize/cospend-category-map.ts
+# (COSPEND_GLOBAL_CATEGORIES, dort mit Quellenangabe/Herleitung). Bewusst nur
+# diese 10 negativen IDs als Auswahl: kein eigener Categories-Endpoint in
+# diesem Patch (siehe server-patch/README.md), positive IDs bleiben für eine
+# künftige projekteigene Kategorienverwaltung reserviert.
+CATEGORYID_CHOICES = [
+    ("", _("Unclassified")),
+    (-1, "🛒 Grocery"),
+    (-2, "🎉 Bar/Party"),
+    (-3, "🏠 Rent"),
+    (-4, "🌩 Bill"),
+    (-5, "🚸 Excursion/Culture"),
+    (-6, "💚 Health"),
+    (-10, "🛍 Shopping"),
+    (-12, "🍴 Restaurant"),
+    (-13, "🛌 Accommodation"),
+    (-14, "🚌 Transport"),
+    (-15, "🎾 Sport"),
+]
+
+
 class BillForm(FlaskForm):
     date = DateField(_("When?"), validators=[DataRequired()], default=datetime.now)
     what = StringField(_("What?"), validators=[DataRequired()])
@@ -385,6 +407,20 @@ class BillForm(FlaskForm):
         coerce=BillType,
         default=BillType.EXPENSE,
     )
+    # Feldname bewusst OHNE Unterstrich: muss exakt "categoryid" heißen, weil
+    # WTForms den POST/JSON-Formularschlüssel standardmäßig vom
+    # Python-Attributnamen ableitet — und "categoryid" ist der Schlüssel, den
+    # MoneyBuster für IHM-Projekte bereits sendet (siehe models.py-Kommentar
+    # bei Bill.category_id für die Herleitung). Auch über die JSON-API nutzbar
+    # (nimmt jeden Integer aus CATEGORYID_CHOICES an) UND als Dropdown im
+    # Web-UI-Formular (forms.html add_bill-Makro) — gleiches Feld, zwei Wege.
+    categoryid = SelectField(
+        _("Category"),
+        choices=CATEGORYID_CHOICES,
+        coerce=lambda v: int(v) if v not in (None, "") else None,
+        validators=[Optional()],
+        default="",
+    )
     submit = SubmitField(_("Submit"))
     submit2 = SubmitField(_("Submit and add a new one"))
 
@@ -399,6 +435,7 @@ class BillForm(FlaskForm):
             project_default_currency=project.default_currency,
             what=self.what.data,
             bill_type=self.bill_type.data,
+            category_id=self.categoryid.data,
         )
 
     def save(self, bill, project):
@@ -410,6 +447,7 @@ class BillForm(FlaskForm):
         bill.date = self.date.data
         bill.owers = Person.query.get_by_ids(self.payed_for.data, project)
         bill.original_currency = self.original_currency.data
+        bill.category_id = self.categoryid.data
         bill.converted_amount = self.currency_helper.exchange_currency(
             bill.amount, bill.original_currency, project.default_currency
         )
@@ -423,6 +461,7 @@ class BillForm(FlaskForm):
         self.external_link.data = bill.external_link
         self.original_currency.data = bill.original_currency
         self.date.data = bill.date
+        self.categoryid.data = bill.category_id
         self.payed_for.data = [int(ower.id) for ower in bill.owers]
 
         self.original_currency.label = Label("original_currency", _("Currency"))

@@ -719,6 +719,20 @@ class Bill(db.Model):
 
     archive = db.Column(db.Integer, db.ForeignKey("archive.id"))
 
+    # Kategorie-Feld — kein Upstream-Feature (siehe Issue #55), hier als
+    # NAS-Fork-Patch ergänzt. Integer statt Freitext, damit die Werte
+    # WIRE-KOMPATIBEL zu Nextcloud Cospend / MoneyBuster sind: negative IDs
+    # sind Cospends fest im Client verdrahtete globale Standardkategorien
+    # (-1 Grocery, -2 Bar/Party, -3 Rent, -4 Bill, -5 Excursion/Culture,
+    # -6 Health, -10 Shopping, -12 Restaurant, -13 Accommodation,
+    # -14 Transport, -15 Sport — siehe cospend-nc
+    # Migration Version000406Date20200426154317.php), MoneyBuster zeigt für
+    # diese IDs Icon+Name auch ohne einen Categories-Endpoint auf IHM-Seite.
+    # Positive IDs sind für künftige projekteigene Kategorien reserviert
+    # (kein Categories-Endpoint in diesem Patch — siehe
+    # obsidian-ihm-plugin/server-patch/README.md). NULL = unklassifiziert.
+    category_id = db.Column(db.Integer, nullable=True)
+
     currency_helper = CurrencyConverter()
 
     def __init__(
@@ -732,6 +746,7 @@ class Bill(db.Model):
         project_default_currency: str = "",
         what: str = "",
         bill_type: str = "Expense",
+        category_id: int = None,
     ):
         super().__init__()
         self.amount = amount
@@ -742,6 +757,7 @@ class Bill(db.Model):
         self.payer_id = payer_id
         self.what = what
         self.bill_type = BillType(bill_type)
+        self.category_id = category_id
         self.converted_amount = self.currency_helper.exchange_currency(
             self.amount, self.original_currency, project_default_currency
         )
@@ -760,6 +776,12 @@ class Bill(db.Model):
             "external_link": self.external_link,
             "original_currency": self.original_currency,
             "converted_amount": self.converted_amount,
+            # Feldname bewusst ohne Unterstrich ("categoryid" statt
+            # "category_id") — exakt der Wire-Name, den MoneyBusters
+            # VersatileProjectSyncClient beim Anlegen/Ändern von IHM-Bills
+            # bereits als Formularfeld sendet (`categoryid`/`paymentmodeid`,
+            # verifiziert gegen den MoneyBuster-Quellcode).
+            "categoryid": self.category_id,
         }
 
     def pay_each_default(self, amount):

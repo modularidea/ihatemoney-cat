@@ -454,6 +454,7 @@ class TestAPI(IhatemoneyTestCase):
             "converted_amount": 25.0,
             "original_currency": "XXX",
             "external_link": "https://raclette.fr",
+            "categoryid": None,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -515,6 +516,7 @@ class TestAPI(IhatemoneyTestCase):
         expected = {
             "what": "beer",
             "payer_id": 2,
+            "categoryid": None,
             "owers": [
                 {"activated": True, "id": 1, "name": "zorglub", "weight": 1},
                 {"activated": True, "id": 2, "name": "jeanne", "weight": 1},
@@ -606,6 +608,7 @@ class TestAPI(IhatemoneyTestCase):
                 "external_link": "",
                 "original_currency": "XXX",
                 "converted_amount": expected_amount,
+                "categoryid": None,
             }
 
             got = json.loads(req.data.decode("utf-8"))
@@ -713,6 +716,7 @@ class TestAPI(IhatemoneyTestCase):
             "converted_amount": 25.0,
             "original_currency": "EUR",
             "external_link": "https://raclette.fr",
+            "categoryid": None,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -760,6 +764,7 @@ class TestAPI(IhatemoneyTestCase):
             "converted_amount": expected_amount,
             "original_currency": "CAD",
             "external_link": "https://raclette.fr",
+            "categoryid": None,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -919,6 +924,7 @@ class TestAPI(IhatemoneyTestCase):
             "external_link": "",
             "converted_amount": 25.0,
             "original_currency": "XXX",
+            "categoryid": None,
         }
         got = json.loads(req.data.decode("utf-8"))
         assert (
