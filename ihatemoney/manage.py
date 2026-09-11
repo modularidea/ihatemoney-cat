@@ -82,6 +82,17 @@ def generate_config(config_file):
     )
 
 
+@cli.command(name="repeat-bills")
+def repeat_bills():
+    """Materialize due copies of repeating bills for all projects (run from
+    cron; the API/web UI also does this lazily on every bill listing)."""
+    created = 0
+    for project in Project.query.all():
+        created += len(project.repeat_bills())
+    db.session.commit()
+    click.secho(f"{created} repeated bill(s) created", fg="green")
+
+
 @cli.command()
 @click.argument("project_name")
 def delete_project(project_name):

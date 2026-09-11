@@ -45,6 +45,8 @@ from ihatemoney.emails import send_creation_email
 from ihatemoney.forms import (
     AdminAuthenticationForm,
     AuthenticationForm,
+    CategoryForm,
+    PaymentModeForm,
     DestructiveActionProjectForm,
     EditProjectForm,
     EmptyForm,
@@ -60,7 +62,7 @@ from ihatemoney.forms import (
     get_billform_for,
 )
 from ihatemoney.history import get_history, purge_history
-from ihatemoney.models import Bill, BillType, LoggingMode, Person, Project, db
+from ihatemoney.models import Bill, BillType, Category, db, LoggingMode, PaymentMode, Person, Project
 from ihatemoney.utils import (
     has_claim,
     Redirect303,
@@ -671,6 +673,9 @@ def invite():
 
 @main.route("/<project_id>/")
 def list_bills():
+    # Lazy materialization of repeating bills (no scheduler needed).
+    if g.project.repeat_bills():
+        db.session.commit()
     bill_form = get_billform_for(g.project)
     # Used for CSRF validation
     csrf_form = EmptyForm()
@@ -813,6 +818,95 @@ def edit_member(member_id):
 
     form.fill(member)
     return render_template("edit_member.html", form=form, edit=True)
+
+
+@main.route("/<project_id>/categories")
+def categories():
+    return render_template(
+        "categories.html",
+        category_form=CategoryForm(),
+        payment_mode_form=PaymentModeForm(),
+        csrf_form=EmptyForm(),
+        current_view="categories",
+    )
+
+
+def _add_item(form, model_cls, success_msg, error_msg):
+    if form.validate():
+        db.session.add(form.save(g.project, model_cls()))
+        db.session.commit()
+        flash(success_msg)
+    else:
+        flash(format_form_errors(form, error_msg), category="danger")
+    return redirect(url_for(".categories"))
+
+
+def _edit_item(item, form, template_kind, success_msg):
+    if not item:
+        raise NotFound()
+    if request.method == "POST" and form.validate():
+        form.save(g.project, item)
+        db.session.commit()
+        flash(success_msg)
+        return redirect(url_for(".categories"))
+    if request.method == "GET":
+        form.fill(item)
+    return render_template("edit_category.html", form=form, kind=template_kind)
+
+
+def _delete_item(item, clear, success_msg, error_msg):
+    form = EmptyForm()
+    if not form.validate():
+        flash(format_form_errors(form, error_msg), category="danger")
+        return redirect(url_for(".categories"))
+    if item:
+        clear(item.id)
+        db.session.delete(item)
+        db.session.commit()
+        flash(success_msg)
+    return redirect(url_for(".categories"))
+
+
+@main.route("/<project_id>/categories/add", methods=["POST"])
+def add_category():
+    return _add_item(CategoryForm(), Category, _("Category added"), _("Error adding category"))
+
+
+@main.route("/<project_id>/categories/<int:category_id>/edit", methods=["GET", "POST"])
+def edit_category(category_id):
+    return _edit_item(g.project.get_category(category_id), CategoryForm(), "category", _("Category modified"))
+
+
+@main.route("/<project_id>/categories/<int:category_id>/delete", methods=["POST"])
+def delete_category(category_id):
+    return _delete_item(
+        g.project.get_category(category_id),
+        g.project.clear_category,
+        _("Category deleted"),
+        _("Error deleting category"),
+    )
+
+
+@main.route("/<project_id>/paymentmodes/add", methods=["POST"])
+def add_payment_mode():
+    return _add_item(PaymentModeForm(), PaymentMode, _("Payment method added"), _("Error adding payment method"))
+
+
+@main.route("/<project_id>/paymentmodes/<int:payment_mode_id>/edit", methods=["GET", "POST"])
+def edit_payment_mode(payment_mode_id):
+    return _edit_item(
+        g.project.get_payment_mode(payment_mode_id), PaymentModeForm(), "paymentmode", _("Payment method modified")
+    )
+
+
+@main.route("/<project_id>/paymentmodes/<int:payment_mode_id>/delete", methods=["POST"])
+def delete_payment_mode(payment_mode_id):
+    return _delete_item(
+        g.project.get_payment_mode(payment_mode_id),
+        g.project.clear_payment_mode,
+        _("Payment method deleted"),
+        _("Error deleting payment method"),
+    )
 
 
 @main.route("/<project_id>/add", methods=["GET", "POST"])

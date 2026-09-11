@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block top_menu %}
+<a href="{{ url_for(".categories") }}">{{ _("Back to categories") }}</a>
+{% endblock %}
+
+{% block content %}
+<div class="container edit-project">
+    <h2>{% if kind == "category" %}{{ _("Edit category") }}{% else %}{{ _("Edit payment method") }}{% endif %}</h2>
+    <form class="form-horizontal" method="post">
+        {{ forms.item_edit(form) }}
+    </form>
+</div>
+{% endblock %}

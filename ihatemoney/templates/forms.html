@@ -149,6 +149,37 @@
 
 {% endmacro %}
 
+{% macro item_add(form) %}
+    {{ form.hidden_tag() }}
+    <div class="input-group input-group-sm w-100">
+        {{ form.icon(class="form-control", placeholder=_("Icon"), style="max-width: 5em") }}
+        {{ form.name(class="form-control", placeholder=_("Name")) }}
+        {{ form.color(class="form-control", type="color", value=(form.color.data or "#cccccc"), style="max-width: 4em") }}
+        <div class="input-group-append">
+            <button class="btn btn-primary" type="submit">{{ _("Add") }}</button>
+        </div>
+    </div>
+    {% include "display_errors.html" %}
+{% endmacro %}
+
+{% macro item_edit(form) %}
+    {% include "display_errors.html" %}
+    {{ form.hidden_tag() }}
+    {{ input(form.name, inline=True) }}
+    {{ input(form.icon, inline=True) }}
+    <div class="form-group row">
+        {{ form.color.label(class="col-3 mt-2") }}
+        <div class="controls col-9">
+            {{ form.color(class="form-control", type="color", value=(form.color.data or "#cccccc"), style="max-width: 6em") }}
+        </div>
+    </div>
+    {{ input(form.order, inline=True) }}
+    <div class="actions">
+        <button type="submit" class="btn btn-primary">{{ _("Save") }}</button>
+        <a href="{{ url_for('.categories') }}" class="btn btn-light">{{ _("Cancel") }}</a>
+    </div>
+{% endmacro %}
+
 {% macro add_bill(form, edit=False, title=True) %}
 
     <fieldset>
@@ -187,14 +218,27 @@
     </div>
 
     {{ input(form.categoryid, inline=True, class="form-control custom-select") }}
+    {% if form.paymentmodeid.choices | length > 1 %}
+        {{ input(form.paymentmodeid, inline=True, class="form-control custom-select") }}
+    {% endif %}
 
-    <details class="mb-3">
+    <details class="mb-3" {% if form.repeat.data and form.repeat.data != "n" %}open{% endif %}>
         <summary class="mb-2">{{ _("More options") }}</summary>
         {% if g.project.default_currency != "XXX" %}
             {{ input(form.original_currency, inline=True, class="form-control custom-select") }}
         {% endif %}
         {{ input(form.bill_type, inline=True) }}
         {{ input(form.external_link, inline=True) }}
+        <div class="form-group row">
+            {{ form.repeat.label(class="col-3 mt-2") }}
+            <div class="controls col-9 form-inline">
+                {{ form.repeat(class="form-control custom-select mr-2") }}
+                <span class="mr-2">{{ _("every") }}</span>
+                {{ form.repeatfreq(class="form-control", style="max-width: 5em", min=1) }}
+            </div>
+        </div>
+        {{ input(form.repeatuntil, inline=True) }}
+        {{ checkbox(form.repeatallactive) }}
     </details>
     </fieldset>
     <div class="actions">

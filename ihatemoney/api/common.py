@@ -7,8 +7,15 @@ from wtforms.fields import BooleanField
 
 from ihatemoney.currency_convertor import CurrencyConverter
 from ihatemoney.emails import send_creation_email
-from ihatemoney.forms import EditProjectForm, MemberForm, ProjectForm, get_billform_for
-from ihatemoney.models import Bill, Person, Project, db
+from ihatemoney.forms import (
+    CategoryForm,
+    EditProjectForm,
+    MemberForm,
+    PaymentModeForm,
+    ProjectForm,
+    get_billform_for,
+)
+from ihatemoney.models import Bill, Category, PaymentMode, Person, Project, db
 
 
 def need_auth(f):
@@ -155,6 +162,9 @@ class BillsHandler(Resource):
     method_decorators = [need_auth]
 
     def get(self, project):
+        # Lazy materialization of repeating bills (no scheduler needed).
+        if project.repeat_bills():
+            db.session.commit()
         return project.get_bills().all()
 
     def post(self, project):
@@ -203,3 +213,115 @@ class TokenHandler(Resource):
 
         token = project.generate_token()
         return {"token": token}, 200
+
+
+class SettleHandler(Resource):
+    method_decorators = [need_auth]
+
+    def get(self, project):
+        return [
+            {
+                "ower": t["ower"].id,
+                "receiver": t["receiver"].id,
+                "amount": round(t["amount"], 2),
+                "currency": t["currency"],
+            }
+            for t in project.get_transactions_to_settle_bill()
+        ]
+
+
+class _ItemsHandler(Resource):
+    """Shared CRUD for project-owned categories and payment modes."""
+
+    method_decorators = [need_auth]
+    form_cls = None
+    model_cls = None
+
+    def _items(self, project):
+        raise NotImplementedError
+
+    def get(self, project):
+        return self._items(project)
+
+    def post(self, project):
+        form = self.form_cls(meta={"csrf": False})
+        if form.validate():
+            item = form.save(project, self.model_cls())
+            db.session.add(item)
+            db.session.commit()
+            return item.id, 201
+        return form.errors, 400
+
+
+class _ItemHandler(Resource):
+    method_decorators = [need_auth]
+    form_cls = None
+
+    def _get(self, project, item_id):
+        raise NotImplementedError
+
+    def _clear(self, project, item_id):
+        raise NotImplementedError
+
+    def get(self, project, item_id):
+        item = self._get(project, item_id)
+        if not item:
+            return "Not Found", 404
+        return item
+
+    def put(self, project, item_id):
+        item = self._get(project, item_id)
+        if not item:
+            return "Not Found", 404
+        form = self.form_cls(meta={"csrf": False})
+        if form.validate():
+            form.save(project, item)
+            db.session.commit()
+            return item
+        return form.errors, 400
+
+    def delete(self, project, item_id):
+        item = self._get(project, item_id)
+        if not item:
+            return "Not Found", 404
+        # Bills keep existing, they just lose the reference.
+        self._clear(project, item_id)
+        db.session.delete(item)
+        db.session.commit()
+        return "OK"
+
+
+class CategoriesHandler(_ItemsHandler):
+    form_cls = CategoryForm
+    model_cls = Category
+
+    def _items(self, project):
+        return project.categories
+
+
+class CategoryHandler(_ItemHandler):
+    form_cls = CategoryForm
+
+    def _get(self, project, item_id):
+        return project.get_category(item_id)
+
+    def _clear(self, project, item_id):
+        project.clear_category(item_id)
+
+
+class PaymentModesHandler(_ItemsHandler):
+    form_cls = PaymentModeForm
+    model_cls = PaymentMode
+
+    def _items(self, project):
+        return project.payment_modes
+
+
+class PaymentModeHandler(_ItemHandler):
+    form_cls = PaymentModeForm
+
+    def _get(self, project, item_id):
+        return project.get_payment_mode(item_id)
+
+    def _clear(self, project, item_id):
+        project.clear_payment_mode(item_id)

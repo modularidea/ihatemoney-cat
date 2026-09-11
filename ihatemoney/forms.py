@@ -85,6 +85,10 @@ def get_billform_for(project, set_default=True, **kwargs):
 
     form.payed_for.choices = active_members
     form.payer.choices = [("", "")] + active_members
+    # Global Cospend categories + this project's own; payment modes are
+    # project-owned only. Both accept "" (= none).
+    form.categoryid.choices = [("", _("Unclassified"))] + project.category_choices()
+    form.paymentmodeid.choices = [("", "—")] + [(p.id, str(p)) for p in project.payment_modes]
 
     # set the last selected payer as default choice if they exist
     if (
@@ -273,6 +277,7 @@ class ProjectForm(EditProjectForm):
             logging_preference=self.logging_preference,
             default_currency=self.default_currency.data,
         )
+        project.seed_payment_modes()
         return project
 
     def validate_id(self, field):
@@ -359,26 +364,48 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField(_("Reset password"))
 
 
-# Nextcloud Cospends fest verdrahtete globale Standardkategorien — gehalten
-# synchron mit obsidian-ihm-plugin/src/categorize/cospend-category-map.ts
-# (COSPEND_GLOBAL_CATEGORIES, dort mit Quellenangabe/Herleitung). Bewusst nur
-# diese 10 negativen IDs als Auswahl: kein eigener Categories-Endpoint in
-# diesem Patch (siehe server-patch/README.md), positive IDs bleiben für eine
-# künftige projekteigene Kategorienverwaltung reserviert.
-CATEGORYID_CHOICES = [
-    ("", _("Unclassified")),
-    (-1, "🛒 Grocery"),
-    (-2, "🎉 Bar/Party"),
-    (-3, "🏠 Rent"),
-    (-4, "🌩 Bill"),
-    (-5, "🚸 Excursion/Culture"),
-    (-6, "💚 Health"),
-    (-10, "🛍 Shopping"),
-    (-12, "🍴 Restaurant"),
-    (-13, "🛌 Accommodation"),
-    (-14, "🚌 Transport"),
-    (-15, "🎾 Sport"),
-]
+
+class OptionalDateField(DateField):
+    """DateField that treats ""/null as None instead of raising (JSON API
+    clients send null for "no date")."""
+
+    def process_formdata(self, valuelist):
+        if not valuelist or valuelist[0] in (None, ""):
+            self.data = None
+            return
+        super().process_formdata(valuelist)
+
+
+class CategoryForm(FlaskForm):
+    """Project-owned category or payment mode (same shape as Cospend)."""
+
+    name = StringField(_("Name"), validators=[DataRequired()], filters=[strip_filter])
+    icon = StringField(_("Icon"), default="", validators=[Optional()], filters=[strip_filter])
+    color = StringField(_("Color"), default="", validators=[Optional()], filters=[strip_filter])
+    order = IntegerField(_("Order"), default=0, validators=[Optional()])
+    submit = SubmitField(_("Add"))
+
+    def validate_color(self, field):
+        if field.data and not match(r"^#[0-9a-fA-F]{6}$", field.data):
+            raise ValidationError(_("Color must be a hex value like #ff8800"))
+
+    def save(self, project, item):
+        item.name = self.name.data
+        item.icon = self.icon.data or ""
+        item.color = self.color.data or ""
+        item.order = self.order.data or 0
+        item.project = project
+        return item
+
+    def fill(self, item):
+        self.name.data = item.name
+        self.icon.data = item.icon
+        self.color.data = item.color
+        self.order.data = item.order or 0
+
+
+class PaymentModeForm(CategoryForm):
+    pass
 
 
 class BillForm(FlaskForm):
@@ -407,19 +434,46 @@ class BillForm(FlaskForm):
         coerce=BillType,
         default=BillType.EXPENSE,
     )
-    # Feldname bewusst OHNE Unterstrich: muss exakt "categoryid" heißen, weil
-    # WTForms den POST/JSON-Formularschlüssel standardmäßig vom
-    # Python-Attributnamen ableitet — und "categoryid" ist der Schlüssel, den
-    # MoneyBuster für IHM-Projekte bereits sendet (siehe models.py-Kommentar
-    # bei Bill.category_id für die Herleitung). Auch über die JSON-API nutzbar
-    # (nimmt jeden Integer aus CATEGORYID_CHOICES an) UND als Dropdown im
-    # Web-UI-Formular (forms.html add_bill-Makro) — gleiches Feld, zwei Wege.
+    # Wire names without underscore ("categoryid"/"paymentmodeid"/"repeat*"):
+    # exactly what MoneyBuster and Cospend clients send. Choices are set per
+    # project in get_billform_for().
     categoryid = SelectField(
         _("Category"),
-        choices=CATEGORYID_CHOICES,
+        choices=[],
         coerce=lambda v: int(v) if v not in (None, "") else None,
         validators=[Optional()],
         default="",
+    )
+    paymentmodeid = SelectField(
+        _("Payment method"),
+        choices=[],
+        coerce=lambda v: int(v) if v not in (None, "") else None,
+        validators=[Optional()],
+        default="",
+    )
+    repeat = SelectField(
+        _("Repeat"),
+        choices=[
+            ("n", _("No")),
+            ("d", _("Daily")),
+            ("w", _("Weekly")),
+            ("b", _("Every two weeks")),
+            ("s", _("Semi-monthly")),
+            ("m", _("Monthly")),
+            ("y", _("Yearly")),
+        ],
+        default="n",
+    )
+    repeatfreq = IntegerField(
+        _("Every"),
+        default=1,
+        validators=[Optional(), NumberRange(min=1)],
+        description=_("Interval multiplier, e.g. 2 = every second week/month"),
+    )
+    repeatuntil = OptionalDateField(_("Repeat until"), validators=[Optional()])
+    repeatallactive = BooleanField(
+        _("Split repeated bills between all active participants"),
+        false_values=("false", "", "False", "0", 0),
     )
     submit = SubmitField(_("Submit"))
     submit2 = SubmitField(_("Submit and add a new one"))
@@ -436,6 +490,11 @@ class BillForm(FlaskForm):
             what=self.what.data,
             bill_type=self.bill_type.data,
             category_id=self.categoryid.data,
+            payment_mode_id=self.paymentmodeid.data,
+            repeat=self.repeat.data or "n",
+            repeat_freq=self.repeatfreq.data or 1,
+            repeat_until=self.repeatuntil.data,
+            repeat_all_active=bool(self.repeatallactive.data),
         )
 
     def save(self, bill, project):
@@ -448,6 +507,11 @@ class BillForm(FlaskForm):
         bill.owers = Person.query.get_by_ids(self.payed_for.data, project)
         bill.original_currency = self.original_currency.data
         bill.category_id = self.categoryid.data
+        bill.payment_mode_id = self.paymentmodeid.data
+        bill.repeat = self.repeat.data or "n"
+        bill.repeat_freq = self.repeatfreq.data or 1
+        bill.repeat_until = self.repeatuntil.data
+        bill.repeat_all_active = bool(self.repeatallactive.data)
         bill.converted_amount = self.currency_helper.exchange_currency(
             bill.amount, bill.original_currency, project.default_currency
         )
@@ -462,6 +526,11 @@ class BillForm(FlaskForm):
         self.original_currency.data = bill.original_currency
         self.date.data = bill.date
         self.categoryid.data = bill.category_id
+        self.paymentmodeid.data = bill.payment_mode_id
+        self.repeat.data = bill.repeat or "n"
+        self.repeatfreq.data = bill.repeat_freq or 1
+        self.repeatuntil.data = bill.repeat_until
+        self.repeatallactive.data = bool(bill.repeat_all_active)
         self.payed_for.data = [int(ower.id) for ower in bill.owers]
 
         self.original_currency.label = Label("original_currency", _("Currency"))

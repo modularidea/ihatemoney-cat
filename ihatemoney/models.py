@@ -62,6 +62,89 @@ class BillType(Enum):
 db = SQLAlchemy()
 
 
+# Nextcloud Cospend's built-in global categories (negative ids, hard-wired in
+# Cospend and MoneyBuster). A bill's category_id may be one of these OR a
+# positive project-owned Category.id. Kept in sync with the IHM Tracker plugin
+# (src/categorize/cospend-category-map.ts).
+COSPEND_GLOBAL_CATEGORIES = {
+    -1: ("🛒", "Grocery", "#ffaa00"),
+    -2: ("🎉", "Bar/Party", "#aa55ff"),
+    -3: ("🏠", "Rent", "#da8733"),
+    -4: ("🌩", "Bill", "#4aa6b0"),
+    -5: ("🚸", "Excursion/Culture", "#0055ff"),
+    -6: ("💚", "Health", "#bf090c"),
+    -10: ("🛍", "Shopping", "#e167d1"),
+    -12: ("🍴", "Restaurant", "#d0d5e1"),
+    -13: ("🛌", "Accommodation", "#5de1a3"),
+    -14: ("🚌", "Transport", "#6f2ee1"),
+    -15: ("🎾", "Sport", "#69e177"),
+}
+
+# Payment modes seeded into every new project (same set as Cospend).
+DEFAULT_PAYMENT_MODES = [
+    ("💳", "Credit card", "#FF7F50"),
+    ("💵", "Cash", "#B0DB47"),
+    ("🎫", "Check", "#DA9DFC"),
+    ("⇄", "Transfer", "#F9A756"),
+    ("🌎", "Online service", "#E1E1E1"),
+]
+
+# Bill repetition, Cospend wire values: n(one) d(aily) w(eekly) b(i-weekly)
+# s(emi-monthly) m(onthly) y(early).
+REPEAT_CHOICES = ["n", "d", "w", "b", "s", "m", "y"]
+
+
+class Category(db.Model):
+    """Project-owned bill category (positive id). Global Cospend categories
+    (negative ids) are not stored, see COSPEND_GLOBAL_CATEGORIES."""
+
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.String(64), db.ForeignKey("project.id"))
+    name = db.Column(db.UnicodeText, nullable=False)
+    icon = db.Column(db.UnicodeText, default="")
+    color = db.Column(db.String(7), default="")
+    order = db.Column(db.Integer, default=0)
+
+    @property
+    def _to_serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "icon": self.icon or "",
+            "color": self.color or "",
+            "order": self.order or 0,
+        }
+
+    def __str__(self):
+        return f"{self.icon} {self.name}".strip()
+
+
+class PaymentMode(db.Model):
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.String(64), db.ForeignKey("project.id"))
+    name = db.Column(db.UnicodeText, nullable=False)
+    icon = db.Column(db.UnicodeText, default="")
+    color = db.Column(db.String(7), default="")
+    order = db.Column(db.Integer, default=0)
+
+    @property
+    def _to_serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "icon": self.icon or "",
+            "color": self.color or "",
+            "order": self.order or 0,
+        }
+
+    def __str__(self):
+        return f"{self.icon} {self.name}".strip()
+
+
 class Project(db.Model):
     class ProjectQuery(Query):
         def get_by_name(self, name):
@@ -82,9 +165,24 @@ class Project(db.Model):
         server_default=LoggingMode.default().name,
     )
     members = db.relationship("Person", backref="project")
+    categories = db.relationship(
+        "Category",
+        backref="project",
+        cascade="all, delete-orphan",
+        order_by="Category.order, Category.id",
+    )
+    payment_modes = db.relationship(
+        "PaymentMode",
+        backref="project",
+        cascade="all, delete-orphan",
+        order_by="PaymentMode.order, PaymentMode.id",
+    )
 
     query_class = ProjectQuery
     default_currency = db.Column(db.String(3))
+
+    # Advertised to API clients so they can detect this fork's extras.
+    FEATURES = ["categoryid", "categories", "paymentmodes", "settle", "repeat"]
 
     @property
     def _to_serialize(self):
@@ -95,6 +193,9 @@ class Project(db.Model):
             "logging_preference": self.logging_preference.value,
             "members": [],
             "default_currency": self.default_currency,
+            "categories": [c._to_serialize for c in self.categories],
+            "paymentmodes": [p._to_serialize for p in self.payment_modes],
+            "features": list(self.FEATURES),
         }
 
         balance = self.balance
@@ -108,6 +209,101 @@ class Project(db.Model):
     @property
     def active_members(self):
         return [m for m in self.members if m.activated]
+
+    def category_choices(self):
+        """(id, label) pairs: global Cospend categories first, then the
+        project's own — used by BillForm and the web UI."""
+        choices = [
+            (cid, f"{icon} {name}") for cid, (icon, name, _color) in COSPEND_GLOBAL_CATEGORIES.items()
+        ]
+        choices += [(c.id, str(c)) for c in self.categories]
+        return choices
+
+    def category_label(self, category_id):
+        if category_id is None:
+            return None
+        if category_id in COSPEND_GLOBAL_CATEGORIES:
+            icon, name, _color = COSPEND_GLOBAL_CATEGORIES[category_id]
+            return f"{icon} {name}"
+        for c in self.categories:
+            if c.id == category_id:
+                return str(c)
+        return None
+
+    def category_color(self, category_id):
+        if category_id in COSPEND_GLOBAL_CATEGORIES:
+            return COSPEND_GLOBAL_CATEGORIES[category_id][2]
+        for c in self.categories:
+            if c.id == category_id:
+                return c.color or ""
+        return ""
+
+    def get_category(self, category_id):
+        return next((c for c in self.categories if c.id == category_id), None)
+
+    def payment_mode_label(self, payment_mode_id):
+        pm = self.get_payment_mode(payment_mode_id)
+        return str(pm) if pm else None
+
+    def get_payment_mode(self, payment_mode_id):
+        if payment_mode_id is None:
+            return None
+        return next((p for p in self.payment_modes if p.id == payment_mode_id), None)
+
+    def clear_category(self, category_id):
+        for bill in self.get_bills_unordered().filter(Bill.category_id == category_id):
+            bill.category_id = None
+
+    def clear_payment_mode(self, payment_mode_id):
+        for bill in self.get_bills_unordered().filter(Bill.payment_mode_id == payment_mode_id):
+            bill.payment_mode_id = None
+
+    def seed_payment_modes(self):
+        for order, (icon, name, color) in enumerate(DEFAULT_PAYMENT_MODES):
+            self.payment_modes.append(
+                PaymentMode(name=name, icon=icon, color=color, order=order)
+            )
+
+    def repeat_bills(self, today=None):
+        """Materialize due copies of repeating bills (Cospend semantics: the
+        copy inherits the repeat settings, the source stops repeating, so
+        only the newest bill in a chain repeats). Returns the created bills;
+        the caller commits."""
+        today = today or datetime.date.today()
+        created = []
+        repeating = [b for b in self.get_bills_unordered().all() if b.repeat and b.repeat != "n"]
+        for source in repeating:
+            current = source
+            while True:
+                next_date = next_repeat_date(current.date, current.repeat, current.repeat_freq or 1)
+                if next_date > today:
+                    break
+                if current.repeat_until and next_date > current.repeat_until:
+                    current.repeat = "n"
+                    break
+                owers = self.active_members if current.repeat_all_active else list(current.owers)
+                copy = Bill(
+                    amount=current.amount,
+                    date=next_date,
+                    external_link=current.external_link or "",
+                    original_currency=current.original_currency,
+                    owers=owers,
+                    payer_id=current.payer_id,
+                    project_default_currency=self.default_currency,
+                    what=current.what,
+                    bill_type=current.bill_type.value,
+                    category_id=current.category_id,
+                    payment_mode_id=current.payment_mode_id,
+                    repeat=current.repeat,
+                    repeat_freq=current.repeat_freq,
+                    repeat_until=current.repeat_until,
+                    repeat_all_active=current.repeat_all_active,
+                )
+                current.repeat = "n"
+                db.session.add(copy)
+                created.append(copy)
+                current = copy
+        return created
 
     @property
     def full_balance(self):
@@ -719,19 +915,17 @@ class Bill(db.Model):
 
     archive = db.Column(db.Integer, db.ForeignKey("archive.id"))
 
-    # Kategorie-Feld — kein Upstream-Feature (siehe Issue #55), hier als
-    # NAS-Fork-Patch ergänzt. Integer statt Freitext, damit die Werte
-    # WIRE-KOMPATIBEL zu Nextcloud Cospend / MoneyBuster sind: negative IDs
-    # sind Cospends fest im Client verdrahtete globale Standardkategorien
-    # (-1 Grocery, -2 Bar/Party, -3 Rent, -4 Bill, -5 Excursion/Culture,
-    # -6 Health, -10 Shopping, -12 Restaurant, -13 Accommodation,
-    # -14 Transport, -15 Sport — siehe cospend-nc
-    # Migration Version000406Date20200426154317.php), MoneyBuster zeigt für
-    # diese IDs Icon+Name auch ohne einen Categories-Endpoint auf IHM-Seite.
-    # Positive IDs sind für künftige projekteigene Kategorien reserviert
-    # (kein Categories-Endpoint in diesem Patch — siehe
-    # obsidian-ihm-plugin/server-patch/README.md). NULL = unklassifiziert.
+    # Category: negative = Cospend global (COSPEND_GLOBAL_CATEGORIES), positive =
+    # project Category.id, NULL = unclassified. Wire name `categoryid`.
     category_id = db.Column(db.Integer, nullable=True)
+    # Project-owned payment mode (see PaymentMode); wire name `paymentmodeid`.
+    payment_mode_id = db.Column(db.Integer, nullable=True)
+    # Repetition (Cospend wire names repeat/repeatfreq/repeatuntil/
+    # repeatallactive), materialized by Project.repeat_bills().
+    repeat = db.Column(db.String(1), default="n", server_default="n")
+    repeat_freq = db.Column(db.Integer, default=1, server_default="1")
+    repeat_until = db.Column(db.Date, nullable=True)
+    repeat_all_active = db.Column(db.Boolean, default=False, server_default="0")
 
     currency_helper = CurrencyConverter()
 
@@ -747,6 +941,11 @@ class Bill(db.Model):
         what: str = "",
         bill_type: str = "Expense",
         category_id: int = None,
+        payment_mode_id: int = None,
+        repeat: str = "n",
+        repeat_freq: int = 1,
+        repeat_until: datetime.date = None,
+        repeat_all_active: bool = False,
     ):
         super().__init__()
         self.amount = amount
@@ -758,6 +957,11 @@ class Bill(db.Model):
         self.what = what
         self.bill_type = BillType(bill_type)
         self.category_id = category_id
+        self.payment_mode_id = payment_mode_id
+        self.repeat = repeat or "n"
+        self.repeat_freq = repeat_freq or 1
+        self.repeat_until = repeat_until
+        self.repeat_all_active = bool(repeat_all_active)
         self.converted_amount = self.currency_helper.exchange_currency(
             self.amount, self.original_currency, project_default_currency
         )
@@ -776,12 +980,13 @@ class Bill(db.Model):
             "external_link": self.external_link,
             "original_currency": self.original_currency,
             "converted_amount": self.converted_amount,
-            # Feldname bewusst ohne Unterstrich ("categoryid" statt
-            # "category_id") — exakt der Wire-Name, den MoneyBusters
-            # VersatileProjectSyncClient beim Anlegen/Ändern von IHM-Bills
-            # bereits als Formularfeld sendet (`categoryid`/`paymentmodeid`,
-            # verifiziert gegen den MoneyBuster-Quellcode).
+            # Wire names without underscore: what MoneyBuster/Cospend send.
             "categoryid": self.category_id,
+            "paymentmodeid": self.payment_mode_id,
+            "repeat": self.repeat or "n",
+            "repeatfreq": self.repeat_freq or 1,
+            "repeatuntil": self.repeat_until,
+            "repeatallactive": bool(self.repeat_all_active),
         }
 
     def pay_each_default(self, amount):
@@ -817,6 +1022,27 @@ class Bill(db.Model):
             f"<Bill of {self.amount} from {self.payer} for "
             f"{', '.join([o.name for o in self.owers])}>"
         )
+
+
+def next_repeat_date(date, repeat, freq=1):
+    """Next occurrence after `date` for a Cospend repeat code."""
+    freq = max(1, int(freq or 1))
+    if repeat == "d":
+        return date + relativedelta(days=freq)
+    if repeat == "w":
+        return date + relativedelta(weeks=freq)
+    if repeat == "b":
+        return date + relativedelta(weeks=2 * freq)
+    if repeat == "s":
+        # 1st and 15th of each month
+        if date.day < 15:
+            return date.replace(day=15)
+        return (date + relativedelta(months=1)).replace(day=1)
+    if repeat == "m":
+        return date + relativedelta(months=freq)
+    if repeat == "y":
+        return date + relativedelta(years=freq)
+    raise ValueError(f"unknown repeat code {repeat!r}")
 
 
 class Archive(db.Model):

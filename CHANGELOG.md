@@ -1,3 +1,22 @@
+# Fork changelog (modularidea/ihatemoney-cat)
+
+## Unreleased — "slim Cospend"
+
+- Project-owned categories (`/categories` API, web UI page), positive `categoryid`s next to
+  Cospend's negative global ids.
+- Payment methods (`paymentmodeid`, `/paymentmodes` API, seeded defaults, web UI).
+- Repeating bills (`repeat`/`repeatfreq`/`repeatuntil`/`repeatallactive`), materialized lazily
+  on listing and via `flask repeat-bills`.
+- `GET /api/projects/<id>/settle`; project info now carries `categories`, `paymentmodes`,
+  `features`.
+- Migration `b2d1e4f5a6c7`.
+
+## 2026-09-10
+
+- `categoryid` field on bills (model, form, API, web UI), migration `a1c0bd2e3f77`.
+
+---
+
 # Changelog
 
 This document describes changes between each past release.

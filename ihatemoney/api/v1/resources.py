@@ -5,12 +5,17 @@ from flask_restful import Api
 from ihatemoney.api.common import (
     BillHandler,
     BillsHandler,
+    CategoriesHandler,
+    CategoryHandler,
     CurrenciesHandler,
     MemberHandler,
     MembersHandler,
+    PaymentModeHandler,
+    PaymentModesHandler,
     ProjectHandler,
     ProjectsHandler,
     ProjectStatsHandler,
+    SettleHandler,
     TokenHandler,
 )
 
@@ -32,4 +37,17 @@ restful_api.add_resource(
 restful_api.add_resource(BillsHandler, "/projects/<string:project_id>/bills")
 restful_api.add_resource(
     BillHandler, "/projects/<string:project_id>/bills/<int:bill_id>"
+)
+restful_api.add_resource(SettleHandler, "/projects/<string:project_id>/settle")
+restful_api.add_resource(
+    CategoriesHandler, "/projects/<string:project_id>/categories"
+)
+restful_api.add_resource(
+    CategoryHandler, "/projects/<string:project_id>/categories/<int:item_id>"
+)
+restful_api.add_resource(
+    PaymentModesHandler, "/projects/<string:project_id>/paymentmodes"
+)
+restful_api.add_resource(
+    PaymentModeHandler, "/projects/<string:project_id>/paymentmodes/<int:item_id>"
 )

@@ -1,29 +1,37 @@
-> **This is a fork.** It adds an optional `categoryid` field (Integer, nullable) to the `Bill`
-> model, form, and web UI. Stock IHateMoney has no category field for bills at all — this has
-> been an [open upstream request since 2011](https://github.com/spiral-project/ihatemoney/issues/55),
-> with two failed attempts ([#557](https://github.com/spiral-project/ihatemoney/pull/557),
-> [#923](https://github.com/spiral-project/ihatemoney/pull/923)), and the project is in
-> maintenance mode — so this lives as a fork rather than a PR.
+> **This is a fork — a "slim Cospend" on top of IHateMoney.** Stock IHateMoney has no bill
+> categories, no payment methods and no repeating bills (categories have been an
+> [open request since 2011](https://github.com/spiral-project/ihatemoney/issues/55); the project
+> is in maintenance mode). This fork adds them, wire-compatible with Nextcloud Cospend and
+> MoneyBuster, and keeps upstream's own test suite green.
 >
-> **What changed** (`ihatemoney/models.py`, `ihatemoney/forms.py`,
-> `ihatemoney/templates/{forms,list_bills}.html`, a new Alembic migration, plus the existing test
-> suite updated for the new field): a `Bill.category_id` column, serialized as JSON key
-> `categoryid` (no underscore — matches what MoneyBuster/Cospend clients already send on the
-> wire), editable via a dropdown in the web UI's bill form and shown as a column in the bill
-> list. Negative IDs are Nextcloud Cospend's fixed global categories (grocery, rent, transport,
-> ...); `null` means unclassified. Full rationale and wire-format verification (against
-> MoneyBuster's own source) are in
-> [`ihm-categoryid.patch`](https://github.com/modularidea/obsidian-ihm-tracker/blob/main/server-patch/README.md).
+> **What it adds**
+> - `categoryid` on every bill: negative ids = Cospend's built-in global categories (shown by
+>   MoneyBuster without any extra endpoint), positive ids = the project's own categories.
+> - **Project categories**: `GET/POST /api/projects/<id>/categories`,
+>   `GET/PUT/DELETE …/categories/<cid>` (`name`, `icon`, `color`, `order`). Deleting one detaches
+>   it from bills.
+> - **Payment methods** (`paymentmodeid` on bills, `…/paymentmodes` CRUD). New projects are
+>   seeded with Cospend's five defaults.
+> - **Repeating bills**: `repeat` (`n d w b s m y`), `repeatfreq`, `repeatuntil`,
+>   `repeatallactive` on bills. Due copies are created lazily whenever bills are listed (API or
+>   web UI) — the copy inherits the rule, the source stops repeating, like Cospend. Optional
+>   cron: `flask --app ihatemoney.wsgi repeat-bills`.
+> - **`GET /api/projects/<id>/settle`**: the server's own settlement plan (`ower`, `receiver`,
+>   `amount`).
+> - The project info (`GET /api/projects/<id>`) lists `categories`, `paymentmodes` and a
+>   `features` array (`categoryid categories paymentmodes settle repeat`) so clients can detect
+>   the fork.
+> - **Web UI**: category and payment-method dropdowns in the bill form, a *Categories* page to
+>   manage both (icon, name, color), repeat options under "More options", markers in the bill
+>   list.
 >
-> Built for and used by **[IHM Tracker](https://github.com/modularidea/obsidian-ihm-tracker)**,
-> an Obsidian plugin for IHateMoney — the plugin works fully without this fork (its own
-> vault-file category sync is the default path); this fork is an optional upgrade for people who
-> self-host IHateMoney and want the category visible to *other* IHM clients too (web UI,
-> MoneyBuster, Cospend), not just the plugin.
+> Built for **[IHM Tracker](https://github.com/modularidea/obsidian-ihm-tracker)**, an Obsidian
+> plugin for IHateMoney/Cospend — the plugin works without this fork (categories then live in a
+> vault file); with it, categories, payment methods and repeats are shared with every other
+> client of the project.
 >
 > Base commit: `e66a7672e8e5c41549bf53c4a824c72c43ab9079` (upstream `main`, "Back to development:
-> 7.2.2"). Upstream's own test suite is unmodified in behavior (146 passed, 5 skipped, same as
-> before the patch).
+> 7.2.2"). Upstream's test suite is green (153 passed incl. the fork's own tests, 5 skipped).
 >
 > **Run it locally:**
 > ```bash

@@ -7,6 +7,16 @@ import pytest
 from ihatemoney.tests.common.help_functions import em_surround
 from ihatemoney.tests.common.ihatemoney_testcase import IhatemoneyTestCase
 
+# Every new project is seeded with Cospend's default payment modes (fork).
+SEEDED_PAYMENT_MODES = [
+    {"id": 1, "name": "Credit card", "icon": "💳", "color": "#FF7F50", "order": 0},
+    {"id": 2, "name": "Cash", "icon": "💵", "color": "#B0DB47", "order": 1},
+    {"id": 3, "name": "Check", "icon": "🎫", "color": "#DA9DFC", "order": 2},
+    {"id": 4, "name": "Transfer", "icon": "⇄", "color": "#F9A756", "order": 3},
+    {"id": 5, "name": "Online service", "icon": "🌎", "color": "#E1E1E1", "order": 4},
+]
+FORK_FEATURES = ["categoryid", "categories", "paymentmodes", "settle", "repeat"]
+
 
 class TestAPI(IhatemoneyTestCase):
     """Tests the API"""
@@ -130,6 +140,9 @@ class TestAPI(IhatemoneyTestCase):
             "default_currency": "XXX",
             "id": "raclette",
             "logging_preference": 1,
+            "categories": [],
+            "paymentmodes": SEEDED_PAYMENT_MODES,
+            "features": FORK_FEATURES,
         }
         decoded_resp = json.loads(resp.data.decode("utf-8"))
         assert decoded_resp == expected
@@ -190,6 +203,9 @@ class TestAPI(IhatemoneyTestCase):
             "members": [],
             "id": "raclette",
             "logging_preference": 1,
+            "categories": [],
+            "paymentmodes": SEEDED_PAYMENT_MODES,
+            "features": FORK_FEATURES,
         }
         decoded_resp = json.loads(resp.data.decode("utf-8"))
         assert decoded_resp == expected
@@ -455,6 +471,11 @@ class TestAPI(IhatemoneyTestCase):
             "original_currency": "XXX",
             "external_link": "https://raclette.fr",
             "categoryid": None,
+            "paymentmodeid": None,
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": None,
+            "repeatallactive": False,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -517,6 +538,11 @@ class TestAPI(IhatemoneyTestCase):
             "what": "beer",
             "payer_id": 2,
             "categoryid": None,
+            "paymentmodeid": None,
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": None,
+            "repeatallactive": False,
             "owers": [
                 {"activated": True, "id": 1, "name": "zorglub", "weight": 1},
                 {"activated": True, "id": 2, "name": "jeanne", "weight": 1},
@@ -609,6 +635,11 @@ class TestAPI(IhatemoneyTestCase):
                 "original_currency": "XXX",
                 "converted_amount": expected_amount,
                 "categoryid": None,
+                "paymentmodeid": None,
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": None,
+                "repeatallactive": False,
             }
 
             got = json.loads(req.data.decode("utf-8"))
@@ -667,6 +698,9 @@ class TestAPI(IhatemoneyTestCase):
             "default_currency": "EUR",
             "id": "raclette",
             "logging_preference": 1,
+            "categories": [],
+            "paymentmodes": SEEDED_PAYMENT_MODES,
+            "features": FORK_FEATURES,
         }
         decoded_resp = json.loads(resp.data.decode("utf-8"))
         assert decoded_resp == expected
@@ -717,6 +751,11 @@ class TestAPI(IhatemoneyTestCase):
             "original_currency": "EUR",
             "external_link": "https://raclette.fr",
             "categoryid": None,
+            "paymentmodeid": None,
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": None,
+            "repeatallactive": False,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -765,6 +804,11 @@ class TestAPI(IhatemoneyTestCase):
             "original_currency": "CAD",
             "external_link": "https://raclette.fr",
             "categoryid": None,
+            "paymentmodeid": None,
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": None,
+            "repeatallactive": False,
         }
 
         got = json.loads(req.data.decode("utf-8"))
@@ -925,6 +969,11 @@ class TestAPI(IhatemoneyTestCase):
             "converted_amount": 25.0,
             "original_currency": "XXX",
             "categoryid": None,
+            "paymentmodeid": None,
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": None,
+            "repeatallactive": False,
         }
         got = json.loads(req.data.decode("utf-8"))
         assert (
@@ -968,6 +1017,9 @@ class TestAPI(IhatemoneyTestCase):
             "name": "raclette",
             "logging_preference": 1,
             "default_currency": "XXX",
+            "categories": [],
+            "paymentmodes": SEEDED_PAYMENT_MODES,
+            "features": FORK_FEATURES,
         }
 
         self.assertStatus(200, req)
@@ -1101,3 +1153,210 @@ class TestAPI(IhatemoneyTestCase):
         # Bill type should now be "Expense"
         got = json.loads(req.data.decode("utf-8"))
         assert got["bill_type"] == "Expense"
+
+    # ── fork: categories / payment modes / settle / repeat ──────────────
+
+    def _auth(self, project="raclette"):
+        return self.get_basic_auth(project)
+
+    def test_categories(self):
+        self.api_create("raclette")
+        self.api_add_member("raclette", "zorglub")
+        self.api_add_member("raclette", "jeanne")
+
+        req = self.client.get("/api/projects/raclette/categories", headers=self._auth())
+        self.assertStatus(200, req)
+        assert json.loads(req.data.decode("utf-8")) == []
+
+        # create
+        req = self.client.post(
+            "/api/projects/raclette/categories",
+            data={"name": "Kids", "icon": "🧸", "color": "#ff8800"},
+            headers=self._auth(),
+        )
+        self.assertStatus(201, req)
+        category_id = int(req.data.decode("utf-8"))
+        assert category_id > 0
+
+        # invalid color
+        req = self.client.post(
+            "/api/projects/raclette/categories",
+            data={"name": "Bad", "color": "red"},
+            headers=self._auth(),
+        )
+        self.assertStatus(400, req)
+
+        req = self.client.get("/api/projects/raclette/categories", headers=self._auth())
+        assert json.loads(req.data.decode("utf-8")) == [
+            {"id": category_id, "name": "Kids", "icon": "🧸", "color": "#ff8800", "order": 0}
+        ]
+        # also embedded in the project info
+        req = self.client.get("/api/projects/raclette", headers=self._auth())
+        assert json.loads(req.data.decode("utf-8"))["categories"][0]["name"] == "Kids"
+
+        # bill with a project category, a global one, and an unknown one
+        def add_bill(categoryid):
+            return self.client.post(
+                "/api/projects/raclette/bills",
+                data={
+                    "date": "2011-08-10",
+                    "what": "fromage",
+                    "payer": "1",
+                    "payed_for": ["1", "2"],
+                    "amount": "25",
+                    "categoryid": categoryid,
+                },
+                headers=self._auth(),
+            )
+
+        self.assertStatus(201, add_bill(category_id))
+        self.assertStatus(201, add_bill(-1))
+        self.assertStatus(400, add_bill(999))
+
+        req = self.client.get("/api/projects/raclette/bills", headers=self._auth())
+        bills = json.loads(req.data.decode("utf-8"))
+        assert sorted(b["categoryid"] for b in bills) == [-1, category_id]
+
+        # update
+        req = self.client.put(
+            f"/api/projects/raclette/categories/{category_id}",
+            data={"name": "Children", "icon": "🧸", "color": "#ff8800", "order": 3},
+            headers=self._auth(),
+        )
+        self.assertStatus(200, req)
+        assert json.loads(req.data.decode("utf-8"))["name"] == "Children"
+
+        # delete clears the reference on bills, bills survive
+        req = self.client.delete(f"/api/projects/raclette/categories/{category_id}", headers=self._auth())
+        self.assertStatus(200, req)
+        req = self.client.get("/api/projects/raclette/bills", headers=self._auth())
+        bills = json.loads(req.data.decode("utf-8"))
+        assert len(bills) == 2
+        assert sorted(str(b["categoryid"]) for b in bills) == ["-1", "None"]
+        req = self.client.delete(f"/api/projects/raclette/categories/{category_id}", headers=self._auth())
+        self.assertStatus(404, req)
+
+    def test_payment_modes(self):
+        self.api_create("raclette")
+        self.api_add_member("raclette", "zorglub")
+
+        req = self.client.get("/api/projects/raclette/paymentmodes", headers=self._auth())
+        self.assertStatus(200, req)
+        assert json.loads(req.data.decode("utf-8")) == SEEDED_PAYMENT_MODES
+
+        req = self.client.post(
+            "/api/projects/raclette/paymentmodes",
+            data={"name": "Voucher", "icon": "🎟"},
+            headers=self._auth(),
+        )
+        self.assertStatus(201, req)
+        pm_id = int(req.data.decode("utf-8"))
+
+        req = self.client.post(
+            "/api/projects/raclette/bills",
+            data={
+                "date": "2011-08-10",
+                "what": "fromage",
+                "payer": "1",
+                "payed_for": ["1"],
+                "amount": "25",
+                "paymentmodeid": pm_id,
+            },
+            headers=self._auth(),
+        )
+        self.assertStatus(201, req)
+        bill_id = int(req.data.decode("utf-8"))
+        req = self.client.get(f"/api/projects/raclette/bills/{bill_id}", headers=self._auth())
+        assert json.loads(req.data.decode("utf-8"))["paymentmodeid"] == pm_id
+
+        # unknown payment mode is rejected
+        req = self.client.put(
+            f"/api/projects/raclette/bills/{bill_id}",
+            data={
+                "date": "2011-08-10",
+                "what": "fromage",
+                "payer": "1",
+                "payed_for": ["1"],
+                "amount": "25",
+                "paymentmodeid": 999,
+            },
+            headers=self._auth(),
+        )
+        self.assertStatus(400, req)
+
+        req = self.client.delete(f"/api/projects/raclette/paymentmodes/{pm_id}", headers=self._auth())
+        self.assertStatus(200, req)
+        req = self.client.get(f"/api/projects/raclette/bills/{bill_id}", headers=self._auth())
+        assert json.loads(req.data.decode("utf-8"))["paymentmodeid"] is None
+
+    def test_settle(self):
+        self.api_create("raclette")
+        self.api_add_member("raclette", "zorglub")
+        self.api_add_member("raclette", "jeanne")
+        self.client.post(
+            "/api/projects/raclette/bills",
+            data={"date": "2011-08-10", "what": "fromage", "payer": "1", "payed_for": ["1", "2"], "amount": "25"},
+            headers=self._auth(),
+        )
+        req = self.client.get("/api/projects/raclette/settle", headers=self._auth())
+        self.assertStatus(200, req)
+        assert json.loads(req.data.decode("utf-8")) == [
+            {"ower": 2, "receiver": 1, "amount": 12.5, "currency": "XXX"}
+        ]
+
+    def test_repeat_bills(self):
+        self.api_create("raclette")
+        self.api_add_member("raclette", "zorglub")
+        self.api_add_member("raclette", "jeanne")
+        two_months_ago = (datetime.date.today() - datetime.timedelta(days=61)).replace(day=1)
+        req = self.client.post(
+            "/api/projects/raclette/bills",
+            data={
+                "date": two_months_ago.isoformat(),
+                "what": "rent",
+                "payer": "1",
+                "payed_for": ["1", "2"],
+                "amount": "100",
+                "repeat": "m",
+                "repeatfreq": "1",
+            },
+            headers=self._auth(),
+        )
+        self.assertStatus(201, req)
+
+        # listing materializes the due copies (2 months → 2 copies)
+        req = self.client.get("/api/projects/raclette/bills", headers=self._auth())
+        bills = json.loads(req.data.decode("utf-8"))
+        assert len(bills) == 3
+        dates = sorted(b["date"] for b in bills)
+        assert dates[0] == two_months_ago.isoformat()
+        # only the newest bill keeps repeating
+        repeating = [b for b in bills if b["repeat"] != "n"]
+        assert len(repeating) == 1
+        assert repeating[0]["date"] == dates[-1]
+        assert repeating[0]["repeatfreq"] == 1
+
+        # idempotent: a second listing creates nothing new
+        req = self.client.get("/api/projects/raclette/bills", headers=self._auth())
+        assert len(json.loads(req.data.decode("utf-8"))) == 3
+
+        # repeat_until in the past stops the chain
+        req = self.client.post(
+            "/api/projects/raclette/bills",
+            data={
+                "date": two_months_ago.isoformat(),
+                "what": "gym",
+                "payer": "1",
+                "payed_for": ["1"],
+                "amount": "10",
+                "repeat": "w",
+                "repeatuntil": two_months_ago.isoformat(),
+            },
+            headers=self._auth(),
+        )
+        self.assertStatus(201, req)
+        req = self.client.get("/api/projects/raclette/bills", headers=self._auth())
+        bills = json.loads(req.data.decode("utf-8"))
+        assert len(bills) == 4
+        gym = [b for b in bills if b["what"] == "gym"]
+        assert len(gym) == 1 and gym[0]["repeat"] == "n"
