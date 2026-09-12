@@ -51,7 +51,7 @@
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarToggler" aria-controls="navbarToggler" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <h1><a class="navbar-brand" href="{{ url_for("main.home") }}"><span>#!</span> money?</a></h1>
+    <h1><a class="navbar-brand" href="{{ url_for("main.home") }}"><span>#!</span> money? <span class="badge badge-warning align-middle" style="font-size: 0.45em; vertical-align: middle;" data-toggle="tooltip" title="{{ _('Fork with categories, payment methods and repeating bills — not the official IHateMoney') }}">cat fork</span></a></h1>
 
     <div class="collapse navbar-collapse" id="navbarToggler">
       <ul class="navbar-nav nav-fill w-100">
@@ -159,7 +159,7 @@
       <div class="footer-limiter">
 
           <div class="footer-right">
-            <a target="_blank" rel="noopener" data-toggle="tooltip" data-placement="top" title="{{ _('Code') }}" href="https://github.com/spiral-project/ihatemoney">
+            <a target="_blank" rel="noopener" data-toggle="tooltip" data-placement="top" title="{{ _('Code') }}" href="https://github.com/modularidea/ihatemoney-cat">
               <i class="icon git">{{ static_include("images/git.svg") | safe }}</i>
             </a>
             <a data-toggle="tooltip" data-placement="top" title="{{ _('Mobile Application') }}" href="{{url_for('main.mobile')}}">
@@ -182,8 +182,10 @@
 
           <div class="footer-left">
             <p>
-              <a href="https://github.com/spiral-project/ihatemoney">{{ _("\"I hate money\" is free software") }}</a><span class="d-none d-sm-inline"></span>,
-              {{ _("you can contribute and improve it!") }}</span>
+              <a href="https://github.com/modularidea/ihatemoney-cat">{{ _("This is the \"cat\" fork of I hate money") }}</a>
+              ({{ _("categories, payment methods, repeating bills") }}) —
+              <a href="https://github.com/spiral-project/ihatemoney">{{ _("upstream project") }}</a>,
+              {{ _("both are free software") }}.</span>
             </p>
           </div>
         </div>

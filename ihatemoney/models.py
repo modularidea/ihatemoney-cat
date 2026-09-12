@@ -554,6 +554,7 @@ class Project(db.Model):
             else:
                 owers = ", ".join([ower.name for ower in bill.owers])
 
+            payment_mode = self.get_payment_mode(bill.payment_mode_id)
             pretty_bills.append(
                 {
                     "what": bill.what,
@@ -564,6 +565,17 @@ class Project(db.Model):
                     "payer_name": Person.query.get(bill.payer_id).name,
                     "payer_weight": Person.query.get(bill.payer_id).weight,
                     "owers": owers,
+                    # Fork fields (Cospend-compatible names). `category`/
+                    # `paymentmode` carry the names so an import into another
+                    # project can recreate them; ids alone are project-local.
+                    "categoryid": bill.category_id,
+                    "category": self.category_label(bill.category_id) or "",
+                    "paymentmodeid": bill.payment_mode_id,
+                    "paymentmode": payment_mode.name if payment_mode else "",
+                    "repeat": bill.repeat or "n",
+                    "repeatfreq": bill.repeat_freq or 1,
+                    "repeatuntil": str(bill.repeat_until) if bill.repeat_until else "",
+                    "repeatallactive": bool(bill.repeat_all_active),
                 }
             )
         return pretty_bills
@@ -637,11 +649,60 @@ class Project(db.Model):
                         payer_id=id_dict[b["payer_name"]],
                         project_default_currency=self.default_currency,
                         what=b["what"],
+                        category_id=self._import_category(b),
+                        payment_mode_id=self._import_payment_mode(b),
+                        **self._import_repeat(b),
                     )
                 except Exception as e:
                     raise ValueError(f"Unable to import csv data: {e!r}")
                 db.session.add(new_bill)
         db.session.commit()
+
+    def _import_category(self, b):
+        """Global (negative) ids are kept; project categories are matched or
+        created by name (`category`), foreign positive ids are dropped."""
+        name = (b.get("category") or "").strip()
+        cid = _to_int(b.get("categoryid"))
+        if cid is not None and cid < 0:
+            return cid if cid in COSPEND_GLOBAL_CATEGORIES else None
+        if not name:
+            return None
+        # strip the "🧸 " icon prefix our own export writes
+        for existing in self.categories:
+            if str(existing).lower() == name.lower() or existing.name.lower() == name.lower():
+                return existing.id
+        icon, _sep, label = name.partition(" ")
+        if not label or len(icon) > 2:
+            icon, label = "", name
+        category = Category(name=label, icon=icon, color="")
+        self.categories.append(category)
+        db.session.flush()
+        return category.id
+
+    def _import_payment_mode(self, b):
+        name = (b.get("paymentmode") or "").strip()
+        if not name:
+            return None
+        for existing in self.payment_modes:
+            if existing.name.lower() == name.lower() or str(existing).lower() == name.lower():
+                return existing.id
+        mode = PaymentMode(name=name, icon="", color="")
+        self.payment_modes.append(mode)
+        db.session.flush()
+        return mode.id
+
+    @staticmethod
+    def _import_repeat(b):
+        repeat = (b.get("repeat") or "n").strip().lower()
+        if repeat not in REPEAT_CHOICES:
+            repeat = "n"
+        until = (b.get("repeatuntil") or "").strip()
+        return {
+            "repeat": repeat,
+            "repeat_freq": max(1, _to_int(b.get("repeatfreq")) or 1),
+            "repeat_until": parse(until).date() if until and until not in ("None", "0") else None,
+            "repeat_all_active": str(b.get("repeatallactive", "")).strip().lower() in ("1", "true", "yes"),
+        }
 
     def remove_member(self, member_id):
         """Remove a member from the project.
@@ -1022,6 +1083,13 @@ class Bill(db.Model):
             f"<Bill of {self.amount} from {self.payer} for "
             f"{', '.join([o.name for o in self.owers])}>"
         )
+
+
+def _to_int(value):
+    try:
+        return int(float(value)) if value not in (None, "", "None") else None
+    except (TypeError, ValueError):
+        return None
 
 
 def next_repeat_date(date, repeat, freq=1):

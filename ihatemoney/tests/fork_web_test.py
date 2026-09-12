@@ -2,7 +2,9 @@
 repeating bills."""
 
 import datetime
+import json
 import re
+from io import BytesIO
 
 from ihatemoney import models
 from ihatemoney.tests.common.ihatemoney_testcase import IhatemoneyTestCase
@@ -126,3 +128,46 @@ class TestForkWeb(IhatemoneyTestCase):
         repeating = models.Bill.query.filter(models.Bill.repeat != "n").all()
         assert len(repeating) == 1
         assert repeating[0].date == max(b.date for b in models.Bill.query.all())
+
+    def test_export_import_round_trip_keeps_fork_fields(self):
+        member_ids = self._project_with_members()
+        self.client.post("/raclette/categories/add", data={"name": "Kids", "icon": "🧸", "color": "#ff8800"})
+        category = models.Category.query.one()
+        pm = self.get_project("raclette").payment_modes[1]  # Cash
+        self.client.post(
+            "/raclette/add",
+            data=self._bill_data(
+                member_ids,
+                date=datetime.date.today().isoformat(),
+                categoryid=category.id,
+                paymentmodeid=pm.id,
+                repeat="w",
+                repeatfreq="2",
+            ),
+        )
+        self.client.post("/raclette/add", data=self._bill_data(member_ids, what="global", categoryid="-1"))
+
+        exported = self.client.get("/raclette/export/bills.json").data
+        rows = {r["what"]: r for r in json.loads(exported)}
+        assert rows["fromage"]["category"] == "🧸 Kids"
+        assert rows["fromage"]["paymentmode"] == "Cash"
+        assert rows["fromage"]["repeat"] == "w" and rows["fromage"]["repeatfreq"] == 2
+        assert rows["global"]["categoryid"] == -1
+
+        # import into a fresh project: category + payment mode recreated by name
+        self.post_project("copy")
+        resp = self.client.post(
+            "/copy/import",
+            data={"file": (BytesIO(exported), "bills.json")},
+            follow_redirects=True,
+        )
+        self.assertStatus(200, resp)
+        copy = self.get_project("copy")
+        bills = {b.what: b for b in copy.get_bills_unordered().all()}
+        kids = next(c for c in copy.categories if c.name == "Kids")
+        assert kids.icon == "🧸"
+        assert bills["fromage"].category_id == kids.id
+        assert bills["fromage"].payment_mode_id == next(p.id for p in copy.payment_modes if p.name == "Cash")
+        assert bills["fromage"].repeat == "w"
+        assert bills["fromage"].repeat_freq == 2
+        assert bills["global"].category_id == -1

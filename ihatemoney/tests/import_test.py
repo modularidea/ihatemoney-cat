@@ -21,6 +21,14 @@ def import_data_6_0(request: pytest.FixtureRequest):
             "payer_name": "tata",
             "payer_weight": 1.0,
             "owers": ["jeanne"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
         {
             "date": "2016-12-31",
@@ -29,6 +37,14 @@ def import_data_6_0(request: pytest.FixtureRequest):
             "payer_name": "jeanne",
             "payer_weight": 1.0,
             "owers": ["zorglub", "tata"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
         {
             "date": "2016-12-31",
@@ -37,6 +53,14 @@ def import_data_6_0(request: pytest.FixtureRequest):
             "payer_name": "zorglub",
             "payer_weight": 2.0,
             "owers": ["zorglub", "jeanne", "tata", "pepe"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
     ]
     request.cls.data = data
@@ -57,6 +81,14 @@ def import_data_7_0(request: pytest.FixtureRequest):
             "payer_weight": 1.0,
             "bill_type": "Expense",
             "owers": ["jeanne"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
         {
             "date": "2016-12-31",
@@ -66,6 +98,14 @@ def import_data_7_0(request: pytest.FixtureRequest):
             "payer_name": "jeanne",
             "payer_weight": 1.0,
             "owers": ["zorglub", "tata"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
         {
             "date": "2016-12-31",
@@ -75,6 +115,14 @@ def import_data_7_0(request: pytest.FixtureRequest):
             "payer_name": "zorglub",
             "payer_weight": 2.0,
             "owers": ["zorglub", "jeanne", "tata", "pepe"],
+            "categoryid": None,
+            "category": "",
+            "paymentmodeid": None,
+            "paymentmode": "",
+            "repeat": "n",
+            "repeatfreq": 1,
+            "repeatuntil": "",
+            "repeatallactive": False,
         },
     ]
     request.cls.data = data
@@ -350,6 +398,14 @@ class CommonTestCase:
                     "payer_name": "tata",
                     "payer_weight": 1.0,
                     "owers": ["jeanne"],
+                    "categoryid": None,
+                    "category": "",
+                    "paymentmodeid": None,
+                    "paymentmode": "",
+                    "repeat": "n",
+                    "repeatfreq": 1,
+                    "repeatuntil": "",
+                    "repeatallactive": False,
                 }
             ]
             for data in [data_wrong_keys, data_amount_missing]:
@@ -418,6 +474,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "tata",
                 "payer_weight": 1.0,
                 "owers": ["jeanne"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
             {
                 "date": "2016-12-31",
@@ -428,6 +492,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "jeanne",
                 "payer_weight": 1.0,
                 "owers": ["zorglub", "tata"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
             {
                 "date": "2016-12-31",
@@ -438,6 +510,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "zorglub",
                 "payer_weight": 2.0,
                 "owers": ["zorglub", "jeanne", "tata", "p\xe9p\xe9"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
         ]
         assert json.loads(resp.data.decode("utf-8")) == expected
@@ -445,10 +525,10 @@ class TestExport(IhatemoneyTestCase):
         # generate csv export of bills
         resp = self.client.get("/raclette/export/bills.csv")
         expected = [
-            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers",
-            "2017-01-01,refund,Reimbursement,XXX,13.33,tata,1.0,jeanne",
-            '2016-12-31,red wine,Expense,XXX,200.0,jeanne,1.0,"zorglub, tata"',
-            '2016-12-31,à raclette,Expense,10.0,XXX,zorglub,2.0,"zorglub, jeanne, tata, pépé"',
+            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers,categoryid,category,paymentmodeid,paymentmode,repeat,repeatfreq,repeatuntil,repeatallactive",
+            "2017-01-01,refund,Reimbursement,XXX,13.33,tata,1.0,jeanne,,,,,n,1,,False",
+            '2016-12-31,red wine,Expense,XXX,200.0,jeanne,1.0,"zorglub, tata",,,,,n,1,,False',
+            '2016-12-31,à raclette,Expense,10.0,XXX,zorglub,2.0,"zorglub, jeanne, tata, pépé",,,,,n,1,,False',
         ]
         received_lines = resp.data.decode("utf-8").split("\n")
 
@@ -555,6 +635,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "tata",
                 "payer_weight": 1.0,
                 "owers": ["jeanne"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
             {
                 "date": "2016-12-31",
@@ -565,6 +653,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "jeanne",
                 "payer_weight": 1.0,
                 "owers": ["zorglub", "tata"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
             {
                 "date": "2016-12-31",
@@ -575,6 +671,14 @@ class TestExport(IhatemoneyTestCase):
                 "payer_name": "zorglub",
                 "payer_weight": 2.0,
                 "owers": ["zorglub", "jeanne", "tata", "p\xe9p\xe9"],
+                "categoryid": None,
+                "category": "",
+                "paymentmodeid": None,
+                "paymentmode": "",
+                "repeat": "n",
+                "repeatfreq": 1,
+                "repeatuntil": "",
+                "repeatallactive": False,
             },
         ]
         assert json.loads(resp.data.decode("utf-8")) == expected
@@ -582,10 +686,10 @@ class TestExport(IhatemoneyTestCase):
         # generate csv export of bills
         resp = self.client.get("/raclette/export/bills.csv")
         expected = [
-            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers",
-            "2017-01-01,refund,Reimbursement,13.33,EUR,tata,1.0,jeanne",
-            '2016-12-31,poutine from Québec,Expense,100.0,CAD,jeanne,1.0,"zorglub, tata"',
-            '2016-12-31,à raclette,Expense,10.0,EUR,zorglub,2.0,"zorglub, jeanne, tata, pépé"',
+            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers,categoryid,category,paymentmodeid,paymentmode,repeat,repeatfreq,repeatuntil,repeatallactive",
+            "2017-01-01,refund,Reimbursement,13.33,EUR,tata,1.0,jeanne,,,,,n,1,,False",
+            '2016-12-31,poutine from Québec,Expense,100.0,CAD,jeanne,1.0,"zorglub, tata",,,,,n,1,,False',
+            '2016-12-31,à raclette,Expense,10.0,EUR,zorglub,2.0,"zorglub, jeanne, tata, pépé",,,,,n,1,,False',
         ]
         received_lines = resp.data.decode("utf-8").split("\n")
 
@@ -687,8 +791,8 @@ class TestExport(IhatemoneyTestCase):
         # generate csv export of bills
         resp = self.client.get("/raclette/export/bills.csv")
         expected = [
-            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers",
-            "2016-12-31,'=COS(36),Expense,10.0,EUR,zorglub,1.0,zorglub",
+            "date,what,bill_type,amount,currency,payer_name,payer_weight,owers,categoryid,category,paymentmodeid,paymentmode,repeat,repeatfreq,repeatuntil,repeatallactive",
+            "2016-12-31,'=COS(36),Expense,10.0,EUR,zorglub,1.0,zorglub,,,,,n,1,,False",
         ]
         received_lines = resp.data.decode("utf-8").split("\n")
 
