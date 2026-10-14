@@ -1,4 +1,4 @@
-# Runs THIS fork (categoryid patch, branch feat/categoryid) instead of the official
+# Runs THIS fork (categoryid patch, branch main) instead of the official
 # ihatemoney/ihatemoney image — builds from the local Dockerfile, which already includes
 # the patched code (ADD . /src in the Dockerfile picks up this checkout as-is).
 #

@@ -35,7 +35,7 @@
 >
 > **Run it locally:**
 > ```bash
-> git clone --branch feat/categoryid https://github.com/modularidea/ihatemoney-cat.git
+> git clone https://github.com/modularidea/ihatemoney-cat.git
 > cd ihatemoney-cat
 > docker compose -f docker-compose.fork.yml up --build
 > ```
